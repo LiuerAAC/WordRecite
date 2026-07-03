@@ -1,0 +1,164 @@
+{
+  "items": [
+    {
+      "id": "a1a2-1655279303310",
+      "meaning_zh": "快速起步；良好开端",
+      "example_sv": "Kursen ger mig en rivstart i svenska.",
+      "example_zh": "这门课让我在瑞典语学习上有了一个快速起步。",
+      "example_explanation_zh": "en rivstart 是 en 词，常和动词 ge 搭配，表示给某人一个好的开端。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303311",
+      "meaning_zh": "章节",
+      "example_sv": "Vi läser kapitel ett idag.",
+      "example_zh": "我们今天读第一章。",
+      "example_explanation_zh": "kapitel 是 ett 词，这里作宾语；编号 ett 放在名词后表示第一章。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303312",
+      "meaning_zh": "页；页面",
+      "example_sv": "Öppna boken på sida tio.",
+      "example_zh": "把书打开到第十页。",
+      "example_explanation_zh": "sida 是 en 词，på sida tio 是教材课堂中常见的表达。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303314",
+      "meaning_zh": "会；能够；知道",
+      "example_sv": "Jag kan lite svenska.",
+      "example_zh": "我会一点瑞典语。",
+      "example_explanation_zh": "kunna 的现在时是 kan，后面可直接接名词或动词原形。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303315",
+      "meaning_zh": "瑞典语的；瑞典的；瑞典语",
+      "example_sv": "Jag har en svensk bok.",
+      "example_zh": "我有一本瑞典语书。",
+      "example_explanation_zh": "svenska 词条在原数据标为形容词，但形容词基本形式通常是 svensk；svenska 也可作语言名。",
+      "quality_note": "原词条词性可能需要人工确认：svenska 可作语言名，也可作形容词变化形式。"
+    },
+    {
+      "id": "a1a2-1655279303316",
+      "meaning_zh": "结合；组合",
+      "example_sv": "Vi kombinerar ord och bilder.",
+      "example_zh": "我们把单词和图片结合起来。",
+      "example_explanation_zh": "kombinera 的现在时是 kombinerar，常用结构是 kombinera A och B。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303317",
+      "meaning_zh": "照片",
+      "example_sv": "Jag visar ett foto på min familj.",
+      "example_zh": "我展示一张我家人的照片。",
+      "example_explanation_zh": "foto 是 ett 词，ett foto 表示一张照片；på 可表示照片内容。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303318",
+      "meaning_zh": "和；与",
+      "example_sv": "Jag dricker kaffe och vatten.",
+      "example_zh": "我喝咖啡和水。",
+      "example_explanation_zh": "och 是并列连词，用来连接两个同类词或短语。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303319",
+      "meaning_zh": "词；单词",
+      "example_sv": "Det här ordet är nytt för mig.",
+      "example_zh": "这个单词对我来说是新的。",
+      "example_explanation_zh": "ord 是 ett 词，定形式是 ordet；det här 后常接名词定形式。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303320",
+      "meaning_zh": "汉堡包",
+      "example_sv": "Hon äter en hamburgare till lunch.",
+      "example_zh": "她午饭吃一个汉堡包。",
+      "example_explanation_zh": "hamburgare 是 en 词，单复数不定形式相同，但这里 en 表示一个。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303321",
+      "meaning_zh": "律师",
+      "example_sv": "Min syster är advokat.",
+      "example_zh": "我姐姐是律师。",
+      "example_explanation_zh": "表示职业时，瑞典语常不用不定冠词，直接说 är advokat。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303322",
+      "meaning_zh": "土豆；马铃薯",
+      "example_sv": "Vi äter potatis till middag.",
+      "example_zh": "我们晚饭吃土豆。",
+      "example_explanation_zh": "potatis 可作集合意义使用，不一定每次都加冠词。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303323",
+      "meaning_zh": "手机",
+      "example_sv": "Min mobil ligger på bordet.",
+      "example_zh": "我的手机在桌子上。",
+      "example_explanation_zh": "mobil 是 en 词，min 用于 en 词单数；ligger 表示物体放置的位置。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303324",
+      "meaning_zh": "纸；纸张",
+      "example_sv": "Jag skriver mitt namn på ett papper.",
+      "example_zh": "我把我的名字写在一张纸上。",
+      "example_explanation_zh": "papper 是 ett 词，ett papper 表示一张纸；på 表示写在表面上。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303325",
+      "meaning_zh": "咖啡",
+      "example_sv": "Vill du ha kaffe?",
+      "example_zh": "你想喝咖啡吗？",
+      "example_explanation_zh": "kaffe 是 ett 词，但作饮品泛指时常不加冠词。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303326",
+      "meaning_zh": "书",
+      "example_sv": "Jag läser en bok på svenska.",
+      "example_zh": "我读一本瑞典语书。",
+      "example_explanation_zh": "bok 是 en 词，不定单数是 en bok，复数是不规则形式 böcker。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303327",
+      "meaning_zh": "肉桂卷",
+      "example_sv": "Jag köper en kanelbulle på kaféet.",
+      "example_zh": "我在咖啡馆买一个肉桂卷。",
+      "example_explanation_zh": "kanelbulle 是 en 词，en kanelbulle 表示一个肉桂卷。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303328",
+      "meaning_zh": "笔",
+      "example_sv": "Har du en penna?",
+      "example_zh": "你有一支笔吗？",
+      "example_explanation_zh": "penna 是 en 词，问是否有某物时可用 Har du ...?",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303329",
+      "meaning_zh": "水",
+      "example_sv": "Jag dricker ett glas vatten.",
+      "example_zh": "我喝一杯水。",
+      "example_explanation_zh": "vatten 是 ett 词，但这里用 ett glas vatten 表示一杯水。",
+      "quality_note": ""
+    },
+    {
+      "id": "a1a2-1655279303330",
+      "meaning_zh": "长的",
+      "example_sv": "Det är en lång dag.",
+      "example_zh": "这是漫长的一天。",
+      "example_explanation_zh": "lång 是形容词，修饰 en 词 dag 时保持基本形式。",
+      "quality_note": ""
+    }
+  ]
+}

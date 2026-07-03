@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>词句记忆控制台</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23e2d8bd'/%3E%3Ctext x='32' y='44' font-size='42' text-anchor='middle' fill='%23263234' font-family='Georgia'%3E%C3%A5%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="styles.css?v=20260703-numeric2">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="side-rail" aria-label="主导航">
+        <div class="brand-block">
+            <span class="brand-mark">Aa</span>
+            <div>
+            <strong>Memory Deck</strong>
+            <span>Multi-language SRS</span>
+            </div>
+        </div>
+        <nav class="nav-list" id="navList"></nav>
+        <div class="rail-status">
+          <span class="status-dot"></span>
+          <span id="storageStatus">Saved</span>
+        </div>
+      </aside>
+
+      <main class="main-stage">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="pageLead">Tasks</p>
+            <h1 id="pageTitle">Homepage</h1>
+          </div>
+        </header>
+
+        <section id="viewRoot" class="view-root" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <template id="emptyStateTemplate">
+      <div class="empty-state">
+        <h2></h2>
+        <p></p>
+      </div>
+    </template>
+
+    <script src="Sverige Resources/sverige-vocabulary.js?v=20260703-official-b2c1-1"></script>
+    <script src="app.js?v=20260703-numeric2"></script>
+  </body>
+</html>

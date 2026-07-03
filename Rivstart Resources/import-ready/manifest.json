@@ -1,0 +1,46 @@
+{
+  "schema_version": "memory-import/v1",
+  "package_type": "memory_import_package",
+  "generated_at": "2026-06-30",
+  "format": "jsonl",
+  "encoding": "utf-8",
+  "files": [
+    {
+      "path": "rivstart-a1-a2.memory-items.jsonl",
+      "level": "A1/A2",
+      "record_count": 2140,
+      "source_file": "Rivstart_A1A2_Swedish__English_w_enett_word_type__more.apkg"
+    },
+    {
+      "path": "rivstart-b1-b2.memory-items.jsonl",
+      "level": "B1/B2",
+      "record_count": 4893,
+      "source_file": "Rivstart_B1B2_ordlista.apkg"
+    },
+    {
+      "path": "rivstart-b2-c1.memory-items.jsonl",
+      "level": "B2/C1",
+      "record_count": 1914,
+      "source_file": "Rivstart_B2C1_ordkort.apkg"
+    }
+  ],
+  "import_requirements": {
+    "must_validate_schema_version": true,
+    "must_use_identity_dedupe_key": true,
+    "must_preserve_source_occurrence_key": true,
+    "must_not_overwrite_non_empty_user_fields_by_default": true
+  },
+  "stats": {
+    "total": 8947,
+    "by_level": {
+      "A1/A2": 2140,
+      "B1/B2": 4893,
+      "B2/C1": 1914
+    },
+    "by_source": {
+      "rivstart_a1a2_anki": 2140,
+      "rivstart_b1b2_anki": 4893,
+      "rivstart_b2c1_anki": 1914
+    }
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "memory-import-v1.schema.json",
+  "title": "Memory Import v1 record",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "record_type",
+    "import_id",
+    "identity",
+    "content",
+    "source",
+    "tags",
+    "import_policy",
+    "quality"
+  ],
+  "properties": {
+    "schema_version": { "const": "memory-import/v1" },
+    "record_type": { "const": "memory_item" },
+    "import_id": { "type": "string", "minLength": 1 },
+    "identity": {
+      "type": "object",
+      "required": [
+        "language",
+        "entry_type",
+        "target_item_type",
+        "front_normalized",
+        "dedupe_key",
+        "source_occurrence_key"
+      ],
+      "properties": {
+        "language": { "type": "string", "minLength": 1 },
+        "entry_type": { "enum": ["word", "phrase", "sentence"] },
+        "target_item_type": { "enum": ["word", "sentence"] },
+        "front_normalized": { "type": "string", "minLength": 1 },
+        "dedupe_key": { "type": "string", "minLength": 1 },
+        "source_occurrence_key": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "content": {
+      "type": "object",
+      "required": ["front", "display_front", "meaning_zh", "meaning_en", "explanation", "examples"],
+      "properties": {
+        "front": { "type": "string", "minLength": 1 },
+        "display_front": { "type": "string" },
+        "meaning_zh": { "type": "string" },
+        "meaning_en": { "type": "string" },
+        "explanation": { "type": "string" },
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "translation_zh": { "type": "string" },
+              "translation_en": { "type": "string" },
+              "source": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "linguistic": {
+      "type": "object",
+      "required": ["part_of_speech", "gender", "forms_raw", "semantic_categories"],
+      "properties": {
+        "part_of_speech": { "type": "string" },
+        "gender": { "type": "string" },
+        "forms_raw": { "type": "string" },
+        "semantic_categories": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "provider",
+        "package_id",
+        "package_level",
+        "source_file",
+        "source_note_id",
+        "chapter",
+        "chapter_label",
+        "page",
+        "raw_tags"
+      ],
+      "properties": {
+        "provider": { "type": "string" },
+        "package_id": { "type": "string" },
+        "package_level": { "type": "string" },
+        "source_file": { "type": "string" },
+        "source_note_id": { "type": "string" },
+        "chapter": { "type": "string" },
+        "chapter_label": { "type": "string" },
+        "page": { "type": "string" },
+        "raw_tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "import_policy": {
+      "type": "object",
+      "required": ["on_duplicate", "initial_review_lane", "create_review_card", "suspended"],
+      "properties": {
+        "on_duplicate": { "enum": ["merge_source_ref_and_fill_empty_fields"] },
+        "initial_review_lane": { "enum": ["latest", "learning", "standard"] },
+        "create_review_card": { "type": "boolean" },
+        "suspended": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "quality": {
+      "type": "object",
+      "required": ["needs_review", "warnings"],
+      "properties": {
+        "needs_review": { "type": "boolean" },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
