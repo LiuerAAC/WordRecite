@@ -3,6 +3,7 @@ const LEGACY_KEY = "nordkort-swedish-state-v1";
 const CLOUD_CONFIG_KEY = "memory-deck-cloud-config-v1";
 const CLOUD_TABLE = "memory_deck_profiles";
 const RIVSTART_IMPORT_LIMIT = 800;
+const WORDBOOK_DETAIL_PAGE_SIZE = 50;
 const SVERIGE_WORDBOOK_SOURCES = {
   rivstart_a1a2_anki: { bookId: "book-sv-rivstart-a1a2", label: "Sverige A1/A2" },
   rivstart_b1b2_anki: { bookId: "book-sv-rivstart-b1b2", label: "Sverige B1/B2" },
@@ -1388,6 +1389,12 @@ function wordbookStats(book) {
 
 function renderWordbookDetail(book) {
   const stats = wordbookStats(book);
+  const items = wordbookItems(book);
+  const totalPages = Math.max(1, Math.ceil(items.length / WORDBOOK_DETAIL_PAGE_SIZE));
+  const currentPage = clampNumber(state.wordbooksView?.page || 1, 1, totalPages, 1);
+  state.wordbooksView = { selectedBookId: book.id, page: currentPage };
+  const offset = (currentPage - 1) * WORDBOOK_DETAIL_PAGE_SIZE;
+  const visibleItems = items.slice(offset, offset + WORDBOOK_DETAIL_PAGE_SIZE);
 
   return `
     <div class="panel-grid">
@@ -1411,10 +1418,14 @@ function renderWordbookDetail(book) {
       </section>
 
       <section class="panel panel-pad span-12">
-        <div class="wordbook-detail-note">
-          <h2>Vocabulary Properties</h2>
-          <p>Use Edit to change the vocabulary book name, language, and type. Word-level browsing stays in Search.</p>
+        <div class="section-head">
+          <div>
+            <h2>词条列表</h2>
+            <p>第 ${currentPage}/${totalPages} 页 · 每页最多 ${WORDBOOK_DETAIL_PAGE_SIZE} 条</p>
+          </div>
         </div>
+        ${renderWordbookListTable(book, visibleItems, offset)}
+        ${renderWordbookPagination(currentPage, totalPages, items.length)}
       </section>
     </div>
   `;
@@ -1518,6 +1529,16 @@ function renderWordbookListTable(book, items, offset) {
           }).join("")}
         </tbody>
       </table>
+    </div>
+  `;
+}
+
+function renderWordbookPagination(currentPage, totalPages, totalItems) {
+  return `
+    <div class="wordbook-pagination">
+      <button class="ghost-button" type="button" data-wordbook-page="${Math.max(1, currentPage - 1)}" ${currentPage <= 1 ? "disabled" : ""}>上一页</button>
+      <span>${totalItems ? `${((currentPage - 1) * WORDBOOK_DETAIL_PAGE_SIZE) + 1}-${Math.min(currentPage * WORDBOOK_DETAIL_PAGE_SIZE, totalItems)} / ${totalItems}` : "0 / 0"}</span>
+      <button class="ghost-button" type="button" data-wordbook-page="${Math.min(totalPages, currentPage + 1)}" ${currentPage >= totalPages ? "disabled" : ""}>下一页</button>
     </div>
   `;
 }
