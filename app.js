@@ -306,7 +306,10 @@ function normalizeLearningState(target) {
   target.review = { currentCardId: null, showAnswer: false, history: [], ...(target.review || {}) };
   target.review.history = Array.isArray(target.review.history) ? target.review.history : [];
   target.wordbooks = canonicalWordbooks(target.items || {}, target.wordbooks || {});
-  Object.values(target.items || {}).forEach((item) => normalizeLearningItem(target, item));
+  Object.values(target.items || {}).forEach((item) => {
+    repairSverigeItemMeaning(item);
+    normalizeLearningItem(target, item);
+  });
   Object.values(target.wordbooks || {}).forEach((book) => {
     book.item_ids = [...new Set((book.item_ids || []).filter((id) => target.items[id]))];
     book.updated_at = book.updated_at || new Date().toISOString();
@@ -375,6 +378,20 @@ function normalizeLearningItem(target, item) {
     item.latest_wordbook_id = item.language === "de" ? "book-de-default" : item.language === "sv" ? "book-sv-default" : "";
   }
   addItemToWordbook(target, item.latest_wordbook_id, item.id, false);
+}
+
+function repairSverigeItemMeaning(item) {
+  if (!item || !SVERIGE_WORDBOOK_SOURCES[item.source]) return;
+  if (!/^\\s*(中文释义|英文释义)\\s*[:：]/.test(item.meaning_zh || "")) return;
+  const replacement = rivstartDataset().entries.find((entry) =>
+    entry.source === item.source &&
+    normalizeType(entry.type) === normalizeType(item.type) &&
+    normalizeKey(entry.front) === normalizeKey(item.front)
+  );
+  if (!replacement?.meaning_zh || /^\\s*(中文释义|英文释义)\\s*[:：]/.test(replacement.meaning_zh)) return;
+  item.meaning_zh = replacement.meaning_zh;
+  item.meaning_en = item.meaning_en || replacement.meaning_en;
+  item.updated_at = new Date().toISOString();
 }
 
 function clampNumber(value, min, max, fallback) {

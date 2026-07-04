@@ -580,7 +580,12 @@ function translateMeaning(meaningEn, frontLower) {
   const first = meaningEn.split(/[;,/]/)[0]?.trim();
   if (!first) return "待校对释义";
   const normalized = first.toLowerCase();
-  return meaningTranslations()[normalized] || `英文释义：${meaningEn}`;
+  return meaningTranslations()[normalized] || cleanMeaningFallback(meaningEn);
+}
+
+function cleanMeaningFallback(meaningEn) {
+  const text = clean(meaningEn);
+  return text || "待校对释义";
 }
 
 function translateVerbForSentence(meaningEn) {
