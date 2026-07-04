@@ -4,6 +4,7 @@ const CLOUD_CONFIG_KEY = "memory-deck-cloud-config-v1";
 const CLOUD_TABLE = "memory_deck_profiles";
 const RIVSTART_IMPORT_LIMIT = 800;
 const WORDBOOK_DETAIL_PAGE_SIZE = 50;
+const SEARCH_RESULT_LIMIT = 80;
 const SVERIGE_WORDBOOK_SOURCES = {
   rivstart_a1a2_anki: { bookId: "book-sv-rivstart-a1a2", label: "Sverige A1/A2" },
   rivstart_b1b2_anki: { bookId: "book-sv-rivstart-b1b2", label: "Sverige B1/B2" },
@@ -1581,12 +1582,15 @@ function renderQueueList(cards) {
 }
 
 function renderLibrary() {
-  const filtered = filteredItems();
+  const hasCriteria = hasLibrarySearchCriteria();
+  const filtered = hasCriteria ? filteredItems() : [];
+  const visible = filtered.slice(0, SEARCH_RESULT_LIMIT);
   return `
     <section class="panel panel-pad">
       <div class="section-head">
         <div>
           <h2>词句库</h2>
+          <p>${hasCriteria ? `找到 ${filtered.length} 条${filtered.length > SEARCH_RESULT_LIMIT ? ` · 仅显示前 ${SEARCH_RESULT_LIMIT} 条` : ""}` : `已收录 ${Object.keys(state.items || {}).length} 条，输入关键词后开始搜索。`}</p>
         </div>
         <button class="primary-button" type="button" data-jump="capture">添加词句</button>
       </div>
@@ -1610,7 +1614,9 @@ function renderLibrary() {
         </select>
       </div>
       <div class="vocab-grid">
-        ${filtered.map(renderItemCard).join("") || `<div class="empty-state"><h2>没有匹配条目</h2><p>调整筛选条件，或添加新的词句。</p></div>`}
+        ${hasCriteria
+          ? visible.map(renderItemCard).join("") || `<div class="empty-state"><h2>没有匹配条目</h2><p>调整关键词或筛选条件。</p></div>`
+          : `<div class="empty-state search-idle-state"><h2>输入关键词开始搜索</h2><p>Search 不再默认展示全部词条。可以按正面、释义、解释、例句搜索，并用语言、类型、来源继续缩小范围。</p></div>`}
       </div>
     </section>
   `;
@@ -2339,6 +2345,14 @@ function filteredItems() {
     const matchesSource = state.filters.source === "all" || item.source === state.filters.source;
     return matchesQuery && matchesLanguage && matchesType && matchesSource;
   }).sort((a, b) => a.front.localeCompare(b.front));
+}
+
+function hasLibrarySearchCriteria() {
+  return Boolean(
+    normalizeKey(state.filters.query) ||
+    state.filters.type !== "all" ||
+    state.filters.source !== "all"
+  );
 }
 
 function sourceLabel(source) {
