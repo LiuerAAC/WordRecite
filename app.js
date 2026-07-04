@@ -1200,6 +1200,9 @@ function renderStudy() {
               <h2>学习卡</h2>
               <p>${languageLabel(current.language)} · 本组 ${queue.length}/${settings.studyBatchSize} · 已学 ${progress.learned}/${progress.total}</p>
             </div>
+            <div class="table-actions">
+              <button class="hammer-button" type="button" data-edit-item="${current.id}" title="编辑卡片" aria-label="编辑卡片">🔨</button>
+            </div>
           </div>
           <div class="review-front">${renderInlineMarkdown(current.front)}</div>
           ${answer}
@@ -1388,11 +1391,11 @@ function renderWordbookCard(book) {
 }
 
 function wordbookStats(book) {
+  const items = wordbookItems(book);
   const importedItems = wordbookImportedItems(book);
-  const externalItems = importedItems.length ? [] : wordbookExternalItems(book);
-  const items = importedItems.length ? importedItems : externalItems;
-  const learned = importedItems.filter((item) => item.wordbook_progress?.[book.id]?.learned_at).length;
-  const skipped = importedItems.filter((item) => item.wordbook_progress?.[book.id]?.skipped || item.skipped).length;
+  const externalItems = wordbookExternalItems(book);
+  const learned = items.filter((item) => item.wordbook_progress?.[book.id]?.learned_at).length;
+  const skipped = items.filter((item) => item.wordbook_progress?.[book.id]?.skipped || item.skipped).length;
   const total = items.length;
   const progress = total ? Math.round(((learned + skipped) / total) * 100) : 0;
   return {
@@ -1450,9 +1453,19 @@ function renderWordbookDetail(book) {
 }
 
 function wordbookItems(book) {
+  if (book.source && SVERIGE_WORDBOOK_SOURCES[book.source]) {
+    const importedItems = wordbookImportedItems(book);
+    return wordbookExternalItems(book).map((externalItem) => {
+      const localId = itemId("sv", normalizeType(externalItem.type), externalItem.front);
+      const localItem = importedItems.find((item) =>
+        item.id === localId ||
+        (item.source_refs || []).some((ref) => ref.id === externalItem.external_entry_id)
+      );
+      return localItem ? { ...localItem, external_entry_id: externalItem.external_entry_id } : externalItem;
+    });
+  }
   const importedItems = wordbookImportedItems(book);
-  if (importedItems.length) return importedItems;
-  return wordbookExternalItems(book);
+  return importedItems;
 }
 
 function wordbookImportedItems(book) {
@@ -1479,6 +1492,8 @@ function wordbookExternalItems(book) {
       meaning_en: entry.meaning_en,
       learned_count: 0,
       skipped: false,
+      source: entry.source,
+      external_entry_id: entry.id,
       wordbook_progress: {},
     }));
 }
@@ -1533,6 +1548,9 @@ function renderWordbookListTable(book, items, offset) {
             const progress = item.wordbook_progress?.[book.id] || {};
             const status = progress.skipped || item.skipped ? "已跳过" : progress.learned_at ? "已学" : "未学";
             const editable = Boolean(state.items[item.id]);
+            const editButton = editable
+              ? `<button class="chip-button" type="button" data-edit-item="${item.id}">编辑</button>`
+              : `<button class="chip-button" type="button" data-edit-wordbook-entry="${book.id}" data-entry-id="${item.external_entry_id || item.id}">编辑</button>`;
             return `
               <tr>
                 <td>${offset + index + 1}</td>
@@ -1541,7 +1559,7 @@ function renderWordbookListTable(book, items, offset) {
                 <td>${renderInlineMarkdown(item.meaning_en || "")}</td>
                 <td>${item.type === "sentence" ? "句子" : "单词"}</td>
                 <td><span class="status-pill">${status} · ${item.learned_count || 0} 次</span></td>
-                <td>${editable ? `<button class="chip-button" type="button" data-edit-item="${item.id}">编辑</button>` : `<span class="status-pill">预览</span>`}</td>
+                <td>${editButton}</td>
               </tr>
             `;
           }).join("")}
@@ -3159,6 +3177,9 @@ function bindEditorEvents() {
   document.querySelectorAll("[data-edit-item]").forEach((button) => {
     button.addEventListener("click", () => openEditor(button.dataset.editItem));
   });
+  document.querySelectorAll("[data-edit-wordbook-entry]").forEach((button) => {
+    button.addEventListener("click", () => openWordbookEntryEditor(button.dataset.editWordbookEntry, button.dataset.entryId));
+  });
   document.querySelectorAll("[data-close-editor]").forEach((node) => {
     node.addEventListener("click", (event) => {
       if (event.target.closest("[data-editor-panel]") && !event.target.matches("[data-close-editor]")) return;
@@ -3202,6 +3223,31 @@ function openEditor(itemId) {
   render();
 }
 
+function openWordbookEntryEditor(bookId, entryId) {
+  const item = ensureWordbookEntryEditable(bookId, entryId);
+  if (!item) return;
+  state.editor = { itemId: item.id };
+  saveState();
+  render();
+}
+
+function ensureWordbookEntryEditable(bookId, entryId) {
+  const book = state.wordbooks?.[bookId];
+  if (!book) return null;
+  const existing = state.items?.[entryId];
+  if (existing) {
+    addItemToWordbook(state, book.id, existing.id, true);
+    return existing;
+  }
+  const entry = rivstartDataset().entries.find((candidate) => candidate.id === entryId && (!book.source || candidate.source === book.source));
+  if (!entry) return null;
+  const item = rivstartEntryToItem(entry);
+  item.latest_wordbook_id = book.id;
+  const result = upsertItem(item, "learning");
+  addItemToWordbook(state, book.id, result.item.id, true);
+  return result.item;
+}
+
 function closeEditor() {
   state.editor = { itemId: null };
   render();
@@ -3230,6 +3276,10 @@ function saveEditor(formData) {
     delete state.items[oldId];
     item.id = nextId;
     state.items[nextId] = item;
+    Object.values(state.wordbooks || {}).forEach((book) => {
+      book.item_ids = (book.item_ids || []).map((id) => id === oldId ? nextId : id);
+      book.item_ids = [...new Set(book.item_ids)];
+    });
     Object.values(state.cards).forEach((card) => {
       if (card.item_id === oldId) card.item_id = nextId;
     });
