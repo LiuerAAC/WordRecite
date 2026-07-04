@@ -21,7 +21,7 @@ const languagePresets = [
   { code: "sv", label: "Swedish", native: "Svenska" },
   { code: "de", label: "German", native: "Deutsch" },
   { code: "en", label: "English", native: "English" },
-  { code: "ja", label: "Japanese", native: "日本語" },
+  { code: "es", label: "Spanish", native: "Español" },
   { code: "fr", label: "French", native: "Français" },
   { code: "custom", label: "Custom", native: "Custom" }
 ];
@@ -180,18 +180,9 @@ function defaultWordbooks(items = {}) {
   }, {});
   const now = new Date().toISOString();
   return {
-    "book-all-default": {
-      id: "book-all-default",
-      name: "默认",
-      language: "all",
-      type: "default",
-      item_ids: Object.values(ids).flat(),
-      created_at: now,
-      updated_at: now
-    },
     "book-sv-default": {
       id: "book-sv-default",
-      name: "瑞典语默认",
+      name: "Swedish Default",
       language: "sv",
       type: "default",
       item_ids: ids.sv || [],
@@ -200,7 +191,7 @@ function defaultWordbooks(items = {}) {
     },
     "book-de-default": {
       id: "book-de-default",
-      name: "德语默认",
+      name: "German Default",
       language: "de",
       type: "default",
       item_ids: ids.de || [],
@@ -302,8 +293,7 @@ function normalizeLearningState(target) {
   target.study.history = Array.isArray(target.study.history) ? target.study.history : [];
   target.review = { currentCardId: null, showAnswer: false, history: [], ...(target.review || {}) };
   target.review.history = Array.isArray(target.review.history) ? target.review.history : [];
-  target.wordbooks = { ...defaultWordbooks(target.items || {}), ...(target.wordbooks || {}) };
-  applySverigeWordbookMetadata(target.wordbooks);
+  target.wordbooks = canonicalWordbooks(target.items || {}, target.wordbooks || {});
   Object.values(target.items || {}).forEach((item) => normalizeLearningItem(target, item));
   Object.values(target.wordbooks || {}).forEach((book) => {
     book.item_ids = [...new Set((book.item_ids || []).filter((id) => target.items[id]))];
@@ -311,15 +301,43 @@ function normalizeLearningState(target) {
   });
 }
 
-function applySverigeWordbookMetadata(wordbooks) {
-  Object.entries(SVERIGE_WORDBOOK_SOURCES).forEach(([source, meta]) => {
-    if (!wordbooks[meta.bookId]) return;
-    wordbooks[meta.bookId].name = wordbooks[meta.bookId].name || meta.label;
-    wordbooks[meta.bookId].language = wordbooks[meta.bookId].language || "sv";
-    wordbooks[meta.bookId].type = wordbooks[meta.bookId].type || "sverige";
-    wordbooks[meta.bookId].source = source;
-    wordbooks[meta.bookId].item_ids = wordbooks[meta.bookId].item_ids || [];
+function canonicalWordbooks(items, existing = {}) {
+  const base = defaultWordbooks(items);
+  const allowedIds = new Set(Object.keys(base));
+  const next = {};
+  Object.entries(base).forEach(([id, book]) => {
+    const previous = existing[id] || {};
+    next[id] = {
+      ...book,
+      created_at: previous.created_at || book.created_at,
+      updated_at: previous.updated_at || book.updated_at,
+      item_ids: id.includes("sverige") || id.includes("rivstart")
+        ? [...new Set(previous.item_ids || book.item_ids || [])]
+        : book.item_ids
+    };
   });
+  Object.values(existing).forEach((book) => {
+    if (!allowedIds.has(book.id)) return;
+    if (book.id === "book-sv-default") {
+      next[book.id].name = "Swedish Default";
+      next[book.id].language = "sv";
+      next[book.id].type = "default";
+    }
+    if (book.id === "book-de-default") {
+      next[book.id].name = "German Default";
+      next[book.id].language = "de";
+      next[book.id].type = "default";
+    }
+  });
+  Object.entries(SVERIGE_WORDBOOK_SOURCES).forEach(([source, meta]) => {
+    const book = next[meta.bookId];
+    if (!book) return;
+    book.name = meta.label;
+    book.language = "sv";
+    book.type = "sverige";
+    book.source = source;
+  });
+  return next;
 }
 
 function normalizeLearningItem(target, item) {
@@ -330,11 +348,10 @@ function normalizeLearningItem(target, item) {
   item.skipped_at = item.skipped_at || "";
   item.wordbook_progress = item.wordbook_progress || {};
   item.wordbook_refs = Array.isArray(item.wordbook_refs) ? item.wordbook_refs : [];
-  if (!item.latest_wordbook_id) {
-    item.latest_wordbook_id = item.language === "de" ? "book-de-default" : item.language === "sv" ? "book-sv-default" : "book-all-default";
+  if (!item.latest_wordbook_id || !target.wordbooks?.[item.latest_wordbook_id]) {
+    item.latest_wordbook_id = item.language === "de" ? "book-de-default" : item.language === "sv" ? "book-sv-default" : "";
   }
   addItemToWordbook(target, item.latest_wordbook_id, item.id, false);
-  addItemToWordbook(target, "book-all-default", item.id, false);
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -514,7 +531,7 @@ function wordbookForSource(source, language) {
   if (SVERIGE_WORDBOOK_SOURCES[source]) return SVERIGE_WORDBOOK_SOURCES[source].bookId;
   if (language === "de") return "book-de-default";
   if (language === "sv") return "book-sv-default";
-  return "book-all-default";
+  return "";
 }
 
 function itemId(language, type, front) {
@@ -1141,7 +1158,7 @@ function studyProgressSummary() {
 }
 
 function wordbookLabel(bookId) {
-  return state.wordbooks?.[bookId]?.name || "默认";
+  return state.wordbooks?.[bookId]?.name || "Default";
 }
 
 function renderWordbooks() {
@@ -2890,7 +2907,7 @@ function inferLanguageFromPath(path) {
     ["german", "de"], ["deutsch", "de"], ["德语", "de"],
     ["swedish", "sv"], ["svenska", "sv"], ["瑞典语", "sv"],
     ["english", "en"], ["英语", "en"],
-    ["japanese", "ja"], ["日本語", "ja"], ["日语", "ja"],
+    ["spanish", "es"], ["español", "es"], ["西班牙语", "es"],
     ["french", "fr"], ["français", "fr"], ["法语", "fr"]
   ];
   const match = rules.find(([needle]) => normalized.includes(needle));
