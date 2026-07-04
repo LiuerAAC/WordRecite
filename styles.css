@@ -359,7 +359,8 @@ p {
 select,
 textarea,
 input[type="search"],
-input[type="text"] {
+input[type="text"],
+input[type="password"] {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--white);
@@ -1099,6 +1100,25 @@ select {
 
 .settings-tool-shell {
   min-width: 0;
+}
+
+.cloud-account-card {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--white);
+}
+
+.cloud-account-card strong {
+  overflow-wrap: anywhere;
+}
+
+.cloud-account-card span {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .wordbook-card {

@@ -1,5 +1,7 @@
 const STORAGE_KEY = "memory-deck-state-v2";
 const LEGACY_KEY = "nordkort-swedish-state-v1";
+const CLOUD_CONFIG_KEY = "memory-deck-cloud-config-v1";
+const CLOUD_TABLE = "memory_deck_profiles";
 const RIVSTART_IMPORT_LIMIT = 800;
 const SVERIGE_WORDBOOK_SOURCES = {
   rivstart_a1a2_anki: { bookId: "book-sv-rivstart-a1a2", label: "Sverige A1/A2" },
@@ -113,6 +115,14 @@ const demoItems = [
 ];
 
 let state = loadState();
+let cloud = {
+  client: null,
+  user: null,
+  configured: false,
+  status: "Not configured",
+  syncing: false
+};
+let cloudSaveTimer = null;
 
 function createInitialState() {
   const items = {};
@@ -317,7 +327,18 @@ function canonicalWordbooks(items, existing = {}) {
     };
   });
   Object.values(existing).forEach((book) => {
-    if (!allowedIds.has(book.id)) return;
+    if (!allowedIds.has(book.id)) {
+      if (!book.id || !book.name) return;
+      next[book.id] = {
+        ...book,
+        language: normalizeLanguage(book.language),
+        type: clean(book.type) || "custom",
+        item_ids: Array.isArray(book.item_ids) ? [...new Set(book.item_ids.filter((id) => items[id]))] : [],
+        created_at: book.created_at || new Date().toISOString(),
+        updated_at: book.updated_at || new Date().toISOString()
+      };
+      return;
+    }
     if (book.id === "book-sv-default") {
       next[book.id].name = "Swedish Default";
       next[book.id].language = "sv";
@@ -364,7 +385,8 @@ function saveState() {
   const storageStatus = document.querySelector("#storageStatus");
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if (storageStatus) storageStatus.textContent = "Saved";
+    if (storageStatus) storageStatus.textContent = cloud.user ? "Saved locally" : "Saved";
+    queueCloudSave();
     return true;
   } catch {
     if (storageStatus) storageStatus.textContent = "Save failed: data too large";
@@ -665,6 +687,137 @@ function renderMarkdownBlock(value) {
     .split(/\r?\n/)
     .map((line) => renderInlineMarkdown(line))
     .join("<br>");
+}
+
+function cloudConfig() {
+  const defaults = window.MEMORY_DECK_SUPABASE || {};
+  try {
+    return { ...defaults, ...JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || "{}") };
+  } catch {
+    return { ...defaults };
+  }
+}
+
+function saveCloudConfig(config) {
+  localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({
+    url: clean(config.url),
+    anonKey: clean(config.anonKey)
+  }));
+}
+
+function cloudCanConnect(config = cloudConfig()) {
+  return Boolean(config.url && config.anonKey && window.supabase?.createClient);
+}
+
+async function initCloud() {
+  const config = cloudConfig();
+  cloud.configured = cloudCanConnect(config);
+  if (!cloud.configured) {
+    cloud.status = window.supabase?.createClient ? "Not configured" : "Supabase library unavailable";
+    renderCloudStatus();
+    return;
+  }
+  try {
+    cloud.client = window.supabase.createClient(config.url, config.anonKey);
+    const sessionResult = await cloud.client.auth.getSession();
+    cloud.user = sessionResult.data?.session?.user || null;
+    cloud.status = cloud.user ? "Signed in" : "Ready to sign in";
+    cloud.client.auth.onAuthStateChange(async (_event, session) => {
+      cloud.user = session?.user || null;
+      cloud.status = cloud.user ? "Signed in" : "Signed out";
+      if (cloud.user) await loadCloudState();
+      render();
+    });
+    if (cloud.user) await loadCloudState();
+    render();
+  } catch (error) {
+    cloud.status = `Cloud error: ${error.message}`;
+    renderCloudStatus();
+  }
+}
+
+function renderCloudStatus() {
+  const storageStatus = document.querySelector("#storageStatus");
+  if (!storageStatus) return;
+  if (cloud.user) storageStatus.textContent = "Cloud connected";
+  else if (cloud.configured) storageStatus.textContent = "Cloud ready";
+  else storageStatus.textContent = "Saved";
+}
+
+function queueCloudSave() {
+  if (!cloud.user || !cloud.client || cloud.syncing) return;
+  window.clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = window.setTimeout(() => saveCloudState("auto"), 900);
+}
+
+function stateForCloud() {
+  return {
+    ...state,
+    editor: { itemId: null },
+    wordbookEditor: { bookId: null }
+  };
+}
+
+async function saveCloudState(reason = "manual") {
+  if (!cloud.user || !cloud.client) return false;
+  try {
+    cloud.syncing = true;
+    cloud.status = reason === "manual" ? "Syncing..." : "Auto syncing...";
+    renderCloudStatus();
+    const { error } = await cloud.client.from(CLOUD_TABLE).upsert({
+      user_id: cloud.user.id,
+      state: stateForCloud(),
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id" });
+    if (error) throw error;
+    cloud.status = "Synced";
+    renderCloudStatus();
+    return true;
+  } catch (error) {
+    cloud.status = `Sync failed: ${error.message}`;
+    renderCloudStatus();
+    return false;
+  } finally {
+    cloud.syncing = false;
+    renderCloudPanelOnly();
+  }
+}
+
+async function loadCloudState() {
+  if (!cloud.user || !cloud.client) return false;
+  try {
+    cloud.syncing = true;
+    cloud.status = "Loading cloud state...";
+    const { data, error } = await cloud.client
+      .from(CLOUD_TABLE)
+      .select("state, updated_at")
+      .eq("user_id", cloud.user.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.state) {
+      state = migrateState(data.state);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      cloud.status = `Loaded cloud state`;
+    } else {
+      await saveCloudState("initial");
+      cloud.status = "Cloud state created";
+    }
+    renderCloudStatus();
+    return true;
+  } catch (error) {
+    cloud.status = `Load failed: ${error.message}`;
+    renderCloudStatus();
+    return false;
+  } finally {
+    cloud.syncing = false;
+  }
+}
+
+function renderCloudPanelOnly() {
+  if (state.activeView !== "settings" || state.settingsPanel !== "cloud") return;
+  const root = document.querySelector("#viewRoot");
+  if (!root) return;
+  render();
 }
 
 function render() {
@@ -970,6 +1123,8 @@ function renderStudy() {
   if (!selectedBook) {
     return renderStudyBookPicker();
   }
+  const importSummary = ensureWordbookImported(selectedBook);
+  if (importSummary.added || importSummary.refreshed) saveState();
   const queue = studyQueue();
   const current = queue.find((item) => item.id === state.study.currentItemId) || queue[0];
   state.study.currentItemId = current?.id || null;
@@ -1043,7 +1198,7 @@ function renderStudy() {
 function renderStudyBookPicker() {
   const books = Object.values(state.wordbooks || {})
     .map((book) => ({ book, stats: wordbookStats(book) }))
-    .filter(({ stats }) => stats.imported > 0)
+    .filter(({ stats }) => stats.total > 0)
     .sort((a, b) => `${a.book.language}-${a.book.type}-${a.book.name}`.localeCompare(`${b.book.language}-${b.book.type}-${b.book.name}`));
   return `
     <div class="panel-grid">
@@ -1299,6 +1454,33 @@ function wordbookExternalItems(book) {
     }));
 }
 
+function ensureWordbookImported(book) {
+  if (!book?.source || !SVERIGE_WORDBOOK_SOURCES[book.source]) {
+    return { total: 0, added: 0, refreshed: 0 };
+  }
+  const entries = rivstartDataset().entries.filter((entry) => entry.source === book.source);
+  if (!entries.length) return { total: 0, added: 0, refreshed: 0 };
+  const hasAllItems = entries.every((entry) => {
+    const item = state.items[itemId("sv", normalizeType(entry.type), entry.front)];
+    return item && book.item_ids?.includes(item.id);
+  });
+  if (hasAllItems) return { total: entries.length, added: 0, refreshed: 0 };
+
+  let added = 0;
+  let refreshed = 0;
+  entries.forEach((entry) => {
+    const item = rivstartEntryToItem(entry);
+    item.latest_wordbook_id = book.id;
+    const result = upsertItem(item, "learning");
+    if (result.status === "new") added += 1;
+    else refreshed += 1;
+  });
+  book.item_ids = [...new Set(book.item_ids || [])];
+  book.updated_at = new Date().toISOString();
+  state.lastImportSummary = { total: entries.length, newCount: added, existingCount: refreshed };
+  return { total: entries.length, added, refreshed };
+}
+
 function renderWordbookListTable(book, items, offset) {
   if (!items.length) {
     return `<div class="empty-state"><h2>暂无词条</h2><p>这本词书还没有导入内容。</p></div>`;
@@ -1416,6 +1598,7 @@ function renderLibrary() {
 function renderSettings() {
   const panels = [
     ["defaults", "默认行为"],
+    ["cloud", "Account"],
     ["sync", "同步"],
     ["anki", "Anki 后路"]
   ];
@@ -1433,8 +1616,76 @@ function renderSettings() {
       </section>
       ${panel === "sync" ? `<div class="span-12 settings-tool-shell">${renderSync()}</div>` : ""}
       ${panel === "anki" ? `<div class="span-12 settings-tool-shell">${renderExport()}</div>` : ""}
+      ${panel === "cloud" ? renderCloudSettings() : ""}
       ${panel === "defaults" ? renderSettingsDefaults() : ""}
     </div>
+  `;
+}
+
+function renderCloudSettings() {
+  const config = cloudConfig();
+  const hasClient = Boolean(window.supabase?.createClient);
+  const connected = Boolean(cloud.user);
+  return `
+    <section class="panel panel-pad span-7">
+      <div class="section-head">
+        <div>
+          <h2>Account / Cloud</h2>
+          <p>Use Supabase Auth and a user-owned database row to keep vocabulary, study progress, and settings online.</p>
+        </div>
+      </div>
+      <form class="capture-form" id="cloudConfigForm">
+        <label>Supabase URL
+          <input name="url" type="text" value="${escapeHtml(config.url || "")}" placeholder="https://project.supabase.co">
+        </label>
+        <label>Supabase Anon Key
+          <input name="anonKey" type="text" value="${escapeHtml(config.anonKey || "")}" placeholder="public anon key">
+        </label>
+        <div class="table-actions">
+          <button class="primary-button" type="submit">Save Backend</button>
+          <button class="ghost-button" type="button" data-cloud-reconnect ${hasClient ? "" : "disabled"}>Reconnect</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel panel-pad span-5">
+      <div class="section-head">
+        <div>
+          <h2>${connected ? "Signed In" : "Sign In"}</h2>
+          <p>${escapeHtml(cloud.status || "Not configured")}</p>
+        </div>
+      </div>
+      ${connected ? `
+        <div class="cloud-account-card">
+          <strong>${escapeHtml(cloud.user.email || cloud.user.id)}</strong>
+          <span>Cloud database: ${escapeHtml(CLOUD_TABLE)}</span>
+        </div>
+        <div class="table-actions">
+          <button class="primary-button" type="button" data-cloud-sync ${cloud.syncing ? "disabled" : ""}>Sync Now</button>
+          <button class="ghost-button" type="button" data-cloud-signout>Sign Out</button>
+        </div>
+      ` : `
+        <form class="capture-form" id="cloudAuthForm">
+          <label>Email
+            <input name="email" type="text" autocomplete="email" placeholder="you@example.com">
+          </label>
+          <label>Password
+            <input name="password" type="password" autocomplete="current-password" placeholder="at least 6 characters">
+          </label>
+          <div class="table-actions">
+            <button class="primary-button" type="submit" data-auth-action="signin" ${cloud.configured ? "" : "disabled"}>Sign In</button>
+            <button class="ghost-button" type="submit" data-auth-action="signup" ${cloud.configured ? "" : "disabled"}>Sign Up</button>
+          </div>
+        </form>
+      `}
+    </section>
+
+    <section class="panel panel-pad span-12">
+      <div class="wordbook-detail-note">
+        <h2>Database Schema</h2>
+        <p>Run the SQL in supabase-schema.sql once in your Supabase project, then save the project URL and anon key here.</p>
+      </div>
+    </section>
   `;
 }
 
@@ -2182,6 +2433,7 @@ function bindViewEvents() {
   bindImportEvents();
   bindSyncEvents();
   bindExportEvents();
+  bindCloudEvents();
   bindSettingsEvents();
   bindEditorEvents();
 }
@@ -2247,6 +2499,7 @@ function bindWordbookEvents() {
     button.addEventListener("click", () => {
       const book = state.wordbooks?.[button.dataset.studyBook];
       if (!book) return;
+      ensureWordbookImported(book);
       state.study.selectedLanguage = book.language === "all" ? "all" : book.language;
       state.study.selectedBookId = book.id;
       state.study.currentItemId = null;
@@ -2669,6 +2922,82 @@ function bindSettingsEvents() {
       saveState();
       render();
       toast("演示数据已重置");
+    });
+  }
+}
+
+function bindCloudEvents() {
+  const configForm = document.querySelector("#cloudConfigForm");
+  if (configForm) {
+    configForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(configForm).entries());
+      saveCloudConfig(data);
+      cloud.client = null;
+      cloud.user = null;
+      cloud.status = "Backend saved";
+      await initCloud();
+      render();
+      toast("Backend configuration saved");
+    });
+  }
+
+  const reconnect = document.querySelector("[data-cloud-reconnect]");
+  if (reconnect) {
+    reconnect.addEventListener("click", async () => {
+      await initCloud();
+      render();
+      toast(cloud.configured ? "Cloud reconnected" : "Cloud not configured");
+    });
+  }
+
+  const authForm = document.querySelector("#cloudAuthForm");
+  if (authForm) {
+    authForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const submitter = event.submitter;
+      const data = Object.fromEntries(new FormData(authForm).entries());
+      const email = clean(data.email);
+      const password = String(data.password || "");
+      if (!cloud.client || !email || !password) {
+        toast("Enter backend config, email, and password");
+        return;
+      }
+      cloud.status = "Authenticating...";
+      render();
+      const action = submitter?.dataset.authAction || "signin";
+      const result = action === "signup"
+        ? await cloud.client.auth.signUp({ email, password })
+        : await cloud.client.auth.signInWithPassword({ email, password });
+      if (result.error) {
+        cloud.status = result.error.message;
+        render();
+        toast(result.error.message);
+        return;
+      }
+      cloud.user = result.data.user || result.data.session?.user || null;
+      cloud.status = cloud.user ? "Signed in" : "Check email to confirm signup";
+      if (cloud.user) await loadCloudState();
+      render();
+    });
+  }
+
+  const sync = document.querySelector("[data-cloud-sync]");
+  if (sync) {
+    sync.addEventListener("click", async () => {
+      const ok = await saveCloudState("manual");
+      render();
+      toast(ok ? "Cloud sync complete" : "Cloud sync failed");
+    });
+  }
+
+  const signout = document.querySelector("[data-cloud-signout]");
+  if (signout) {
+    signout.addEventListener("click", async () => {
+      if (cloud.client) await cloud.client.auth.signOut();
+      cloud.user = null;
+      cloud.status = "Signed out";
+      render();
     });
   }
 }
@@ -3455,3 +3784,4 @@ function toast(message) {
 }
 
 render();
+initCloud();
