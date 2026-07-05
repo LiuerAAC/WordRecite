@@ -16,9 +16,10 @@ const navItems = [
   { id: "study", label: "Study", title: "Study", glyph: "02" },
   { id: "review", label: "Review", title: "Review", glyph: "03" },
   { id: "wordbooks", label: "Vocabulary", title: "Vocabulary", glyph: "04" },
-  { id: "library", label: "Search", title: "Search", glyph: "05" },
-  { id: "capture", label: "Add", title: "Add", glyph: "06" },
-  { id: "settings", label: "Setting", title: "Setting", glyph: "07" }
+  { id: "allwords", label: "All Words", title: "All Words", glyph: "05" },
+  { id: "library", label: "Search", title: "Search", glyph: "06" },
+  { id: "capture", label: "Add", title: "Add", glyph: "07" },
+  { id: "settings", label: "Setting", title: "Setting", glyph: "08" }
 ];
 
 const languagePresets = [
@@ -163,6 +164,7 @@ function createInitialState() {
     syncInboundText: "",
     syncPreview: [],
     filters: { query: "", language: settings.defaultSearchLanguage, type: "all", source: "all" },
+    allWords: { letter: "" },
     rivstart: { query: "", level: "all", chapter: "all" },
     trendRange: 14,
     editor: { itemId: null },
@@ -273,6 +275,7 @@ function migrateState(parsed) {
     wordbooksView: { ...fresh.wordbooksView, ...(parsed.wordbooksView || {}) },
     wordbookImportDraft: { ...fresh.wordbookImportDraft, ...(parsed.wordbookImportDraft || {}) },
     filters: { ...fresh.filters, ...(parsed.filters || {}) },
+    allWords: { ...fresh.allWords, ...(parsed.allWords || {}) },
     modifiedStack: Array.isArray(parsed.modifiedStack) ? parsed.modifiedStack : fresh.modifiedStack,
     syncLog: Array.isArray(parsed.syncLog) ? parsed.syncLog : fresh.syncLog,
     syncCheckpoint: { ...fresh.syncCheckpoint, ...(parsed.syncCheckpoint || {}) },
@@ -869,6 +872,7 @@ function render() {
   if (state.activeView === "review") root.innerHTML = renderReview();
   if (state.activeView === "study") root.innerHTML = renderStudy();
   if (state.activeView === "wordbooks") root.innerHTML = renderWordbooks();
+  if (state.activeView === "allwords") root.innerHTML = renderAllWords();
   if (state.activeView === "library") root.innerHTML = renderLibrary();
   if (state.activeView === "capture") root.innerHTML = renderCapture();
   if (state.activeView === "settings") root.innerHTML = renderSettings();
@@ -914,6 +918,9 @@ function resetViewState(view) {
   }
   if (view === "wordbooks") {
     state.wordbooksView = { selectedBookId: "", page: 1 };
+  }
+  if (view === "allwords") {
+    state.allWords = { letter: "" };
   }
   if (view === "library") {
     state.filters = {
@@ -1616,16 +1623,171 @@ function renderQueueList(cards) {
   `;
 }
 
+function vocabularyIndexEntries() {
+  const entries = new Map();
+  const put = (input, options = {}) => {
+    const language = normalizeLanguage(input.language || "sv");
+    const type = normalizeType(input.type || "word");
+    const front = clean(input.front);
+    if (!front) return;
+    const key = `${language}|${type}|${normalizeKey(front)}`;
+    const existing = entries.get(key) || {
+      id: key,
+      language,
+      type,
+      front,
+      meaning_zh: "",
+      meaning_en: "",
+      explanation: "",
+      sentence: "",
+      sentence_translation: "",
+      tags: [],
+      learned_count: 0,
+      skipped: false,
+      localItemId: "",
+      source_values: [],
+      source_tags: [],
+      external_refs: []
+    };
+    const prefer = Boolean(options.local);
+    existing.front = prefer ? front : existing.front || front;
+    existing.meaning_zh = prefer ? (input.meaning_zh || existing.meaning_zh) : existing.meaning_zh || input.meaning_zh || "";
+    existing.meaning_en = prefer ? (input.meaning_en || existing.meaning_en) : existing.meaning_en || input.meaning_en || "";
+    existing.explanation = prefer ? (input.explanation || existing.explanation) : existing.explanation || input.explanation || "";
+    existing.sentence = prefer ? (input.sentence || existing.sentence) : existing.sentence || input.sentence || "";
+    existing.sentence_translation = prefer ? (input.sentence_translation || existing.sentence_translation) : existing.sentence_translation || input.sentence_translation || "";
+    existing.tags = [...new Set([...(existing.tags || []), ...normalizeTags(input.tags || [])])];
+    existing.learned_count = Math.max(existing.learned_count || 0, Number(input.learned_count || 0));
+    existing.skipped = Boolean(existing.skipped || input.skipped);
+    if (options.local) existing.localItemId = input.id;
+    if (options.source) {
+      existing.source_values = [...new Set([...existing.source_values, options.source])];
+      existing.source_tags = [...new Set([...existing.source_tags, sourceLabel(options.source)])];
+    }
+    if (options.externalEntryId) {
+      existing.external_refs = [
+        ...existing.external_refs.filter((ref) => ref.entryId !== options.externalEntryId),
+        { entryId: options.externalEntryId, source: options.source, bookId: wordbookForSource(options.source, language) }
+      ];
+    }
+    entries.set(key, existing);
+  };
+
+  rivstartDataset().entries.forEach((entry) => {
+    put({
+      language: "sv",
+      type: entry.type,
+      front: entry.front,
+      meaning_zh: entry.meaning_zh,
+      meaning_en: entry.meaning_en,
+      explanation: entry.explanation,
+      sentence: entry.sentence,
+      sentence_translation: entry.sentence_translation,
+      tags: entry.tags
+    }, { source: entry.source, externalEntryId: entry.id });
+  });
+
+  Object.values(state.items || {}).forEach((item) => {
+    put(item, { source: item.source || "manual", local: true });
+    (item.source_refs || []).forEach((ref) => {
+      if (!ref?.source_name || !SVERIGE_WORDBOOK_SOURCES[ref.source_name]) return;
+      put(item, { source: ref.source_name, local: true, externalEntryId: ref.id });
+    });
+  });
+
+  return [...entries.values()].sort((a, b) =>
+    a.language.localeCompare(b.language) ||
+    a.type.localeCompare(b.type) ||
+    a.front.localeCompare(b.front, "sv")
+  );
+}
+
+function filteredVocabularyEntries() {
+  const query = normalizeKey(state.filters.query);
+  return vocabularyIndexEntries().filter((entry) => {
+    const queryText = [
+      entry.front,
+      entry.meaning_zh,
+      entry.meaning_en,
+      entry.explanation,
+      entry.sentence,
+      entry.sentence_translation,
+      entry.tags.join(" "),
+      entry.source_tags.join(" ")
+    ].join(" ");
+    const matchesQuery = !query || normalizeKey(queryText).includes(query);
+    const matchesLanguage = state.filters.language === "all" || entry.language === state.filters.language;
+    const matchesType = state.filters.type === "all" || entry.type === state.filters.type;
+    const matchesSource = state.filters.source === "all" || entry.source_values.includes(state.filters.source);
+    return matchesQuery && matchesLanguage && matchesType && matchesSource;
+  });
+}
+
+function alphabetKey(value) {
+  const first = clean(value).charAt(0).toLocaleUpperCase("sv-SE");
+  return /^[A-ZÅÄÖ]$/u.test(first) ? first : "#";
+}
+
+function allWordsEntries() {
+  return vocabularyIndexEntries().filter((entry) => entry.type === "word");
+}
+
+function allWordsLetters(entries) {
+  const letters = [...new Set(entries.map((entry) => alphabetKey(entry.front)))];
+  return letters.sort((a, b) => {
+    if (a === "#") return 1;
+    if (b === "#") return -1;
+    return a.localeCompare(b, "sv");
+  });
+}
+
+function entryEditButton(entry, compact = false) {
+  if (entry.localItemId) {
+    return `<button class="${compact ? "chip-button" : "hammer-button card-edit"}" type="button" data-edit-item="${entry.localItemId}" title="编辑卡片" aria-label="编辑卡片">${compact ? "编辑" : "🔨"}</button>`;
+  }
+  const ref = entry.external_refs.find((item) => item.bookId && item.entryId);
+  if (!ref) return "";
+  return `<button class="${compact ? "chip-button" : "hammer-button card-edit"}" type="button" data-edit-wordbook-entry="${ref.bookId}" data-entry-id="${ref.entryId}" title="编辑卡片" aria-label="编辑卡片">${compact ? "编辑" : "🔨"}</button>`;
+}
+
+function renderSourceTags(entry) {
+  return entry.source_tags.map((source) => `<span class="source-pill">${escapeHtml(source)}</span>`).join("");
+}
+
+function renderLibraryEntryCard(entry) {
+  const item = entry.localItemId ? state.items[entry.localItemId] : null;
+  const card = item ? Object.values(state.cards).find((candidate) => candidate.item_id === item.id) : null;
+  return `
+    <article class="word-card">
+      ${entryEditButton(entry)}
+      <div>
+        <h3>${renderInlineMarkdown(entry.front)}</h3>
+        <p>${renderInlineMarkdown(entry.meaning_zh || entry.meaning_en || "未填写释义")}</p>
+      </div>
+      <p>${renderMarkdownBlock(entry.explanation || entry.sentence || "未填写解释文本。")}</p>
+      <div class="word-meta">
+        <span class="tag">${languageLabel(entry.language)}</span>
+        <span class="tag">${entry.type}</span>
+        ${renderSourceTags(entry)}
+        ${entry.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+      </div>
+      <div class="table-actions">
+        ${item ? `<button class="chip-button" type="button" data-refresh-card="${item.id}">加入最新复习</button>` : ""}
+        ${card ? `<button class="chip-button" type="button" data-toggle-suspend="${card.id}">${card.suspended ? "恢复" : "暂停"}</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
 function renderLibrary() {
-  const hasCriteria = hasLibrarySearchCriteria();
-  const filtered = hasCriteria ? filteredItems() : [];
+  const filtered = filteredVocabularyEntries();
   const visible = filtered.slice(0, SEARCH_RESULT_LIMIT);
   return `
     <section class="panel panel-pad">
       <div class="section-head">
         <div>
           <h2>词句库</h2>
-          <p>${hasCriteria ? `找到 ${filtered.length} 条${filtered.length > SEARCH_RESULT_LIMIT ? ` · 仅显示前 ${SEARCH_RESULT_LIMIT} 条` : ""}` : `已收录 ${Object.keys(state.items || {}).length} 条，输入关键词后开始搜索。`}</p>
+          <p>找到 ${filtered.length} 条${filtered.length > SEARCH_RESULT_LIMIT ? ` · 仅显示前 ${SEARCH_RESULT_LIMIT} 条` : ""}</p>
         </div>
         <button class="primary-button" type="button" data-jump="capture">添加词句</button>
       </div>
@@ -1649,11 +1811,70 @@ function renderLibrary() {
         </select>
       </div>
       <div class="vocab-grid">
-        ${hasCriteria
-          ? visible.map(renderItemCard).join("") || `<div class="empty-state"><h2>没有匹配条目</h2><p>调整关键词或筛选条件。</p></div>`
-          : `<div class="empty-state search-idle-state"><h2>输入关键词开始搜索</h2><p>Search 不再默认展示全部词条。可以按正面、释义、解释、例句搜索，并用语言、类型、来源继续缩小范围。</p></div>`}
+        ${visible.map(renderLibraryEntryCard).join("") || `<div class="empty-state"><h2>没有匹配条目</h2><p>调整关键词或筛选条件。</p></div>`}
       </div>
     </section>
+  `;
+}
+
+function renderAllWords() {
+  const entries = allWordsEntries();
+  const letters = allWordsLetters(entries);
+  const selectedLetter = letters.includes(state.allWords?.letter) ? state.allWords.letter : (letters[0] || "");
+  state.allWords = { letter: selectedLetter };
+  const visible = selectedLetter ? entries.filter((entry) => alphabetKey(entry.front) === selectedLetter) : [];
+  return `
+    <div class="panel-grid">
+      <section class="panel panel-pad span-12">
+        <div class="section-head">
+          <div>
+            <h2>全部单词列表</h2>
+            <p>共 ${entries.length} 个单词 · 当前 ${selectedLetter || "-"}：${visible.length} 个</p>
+          </div>
+        </div>
+        <div class="alphabet-tabs">
+          ${letters.map((letter) => `
+            <button class="chip-button ${letter === selectedLetter ? "is-active" : ""}" type="button" data-allwords-letter="${letter}">
+              ${escapeHtml(letter)}
+            </button>
+          `).join("")}
+        </div>
+      </section>
+
+      <section class="panel panel-pad span-12">
+        ${renderAllWordsTable(visible)}
+      </section>
+    </div>
+  `;
+}
+
+function renderAllWordsTable(entries) {
+  if (!entries.length) return `<div class="empty-state"><h2>暂无单词</h2><p>当前字母下没有词条。</p></div>`;
+  return `
+    <div class="wordbook-table-wrap">
+      <table class="wordbook-table all-words-table">
+        <thead>
+          <tr>
+            <th>单词</th>
+            <th>中文释义</th>
+            <th>英文释义</th>
+            <th>来源</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entries.map((entry) => `
+            <tr>
+              <td class="word-cell">${renderInlineMarkdown(entry.front)}</td>
+              <td>${renderInlineMarkdown(entry.meaning_zh || "")}</td>
+              <td>${renderInlineMarkdown(entry.meaning_en || "")}</td>
+              <td><div class="word-source-stack">${renderSourceTags(entry)}</div></td>
+              <td>${entryEditButton(entry, true)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -2496,6 +2717,7 @@ function bindViewEvents() {
   }
 
   bindLibraryEvents();
+  bindAllWordsEvents();
   bindWordbookEvents();
   bindCaptureEvents();
   bindReviewEvents();
@@ -2551,6 +2773,16 @@ function bindLibraryEvents() {
   });
   document.querySelectorAll("[data-toggle-suspend]").forEach((button) => {
     button.addEventListener("click", () => toggleSuspend(button.dataset.toggleSuspend));
+  });
+}
+
+function bindAllWordsEvents() {
+  document.querySelectorAll("[data-allwords-letter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.allWords = { letter: button.dataset.allwordsLetter || "" };
+      saveState();
+      render();
+    });
   });
 }
 

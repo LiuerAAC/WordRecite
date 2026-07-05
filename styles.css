@@ -1243,6 +1243,28 @@ select {
   line-height: 1.2;
 }
 
+.alphabet-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.alphabet-tabs .chip-button {
+  min-width: 38px;
+  padding: 0 8px;
+}
+
+.all-words-table td {
+  vertical-align: middle;
+}
+
+.word-source-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .wordbook-pagination {
   display: flex;
   align-items: center;
