@@ -1154,13 +1154,15 @@ select {
 
 .wordbook-counts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(54px, 1fr) minmax(54px, 1fr) minmax(82px, 1.35fr);
   gap: 8px;
+  width: 100%;
 }
 
 .wordbook-counts span {
   display: grid;
   gap: 4px;
+  min-width: 0;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1170,9 +1172,23 @@ select {
 }
 
 .wordbook-counts strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--ink);
   font-size: 24px;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.wordbook-counts strong.count-size-sm {
+  font-size: 21px;
+}
+
+.wordbook-counts strong.count-size-xs {
+  font-size: 18px;
 }
 
 .study-book-option {
@@ -1180,6 +1196,12 @@ select {
   display: grid;
   gap: 16px;
   padding-right: 72px;
+}
+
+.study-book-option > .primary-button,
+.wordbook-card > .table-actions,
+.wordbook-card > .primary-button {
+  width: 100%;
 }
 
 .study-book-session {

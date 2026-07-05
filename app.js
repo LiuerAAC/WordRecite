@@ -70,53 +70,6 @@ const reviewFrequencyProfiles = {
   }
 };
 
-const demoItems = [
-  {
-    type: "word",
-    language: "sv",
-    front: "fönster",
-    meaning_zh: "窗户",
-    meaning_en: "window",
-    explanation: "中性名词，常见形式是 ett fönster。复数可以是 fönster。",
-    sentence: "Jag öppnar fönstret.",
-    sentence_translation: "我打开窗户。",
-    tags: ["reading", "noun"]
-  },
-  {
-    type: "word",
-    language: "sv",
-    front: "skriva",
-    meaning_zh: "写",
-    meaning_en: "to write",
-    explanation: "动词原形。现在时 skriver，supine 是 skrivit。",
-    sentence: "Hon har skrivit ett brev.",
-    sentence_translation: "她写了一封信。",
-    tags: ["verb"]
-  },
-  {
-    type: "sentence",
-    language: "sv",
-    front: "Varje morgon dricker jag kaffe.",
-    meaning_zh: "每天早上我喝咖啡。",
-    meaning_en: "Every morning I drink coffee.",
-    explanation: "句首时间状语后，限定动词 dricker 位于第二成分，主语 jag 在动词后。",
-    sentence: "",
-    sentence_translation: "",
-    tags: ["sentence", "word-order"]
-  },
-  {
-    type: "word",
-    language: "de",
-    front: "Zeitung",
-    meaning_zh: "报纸",
-    meaning_en: "newspaper",
-    explanation: "德语阴性名词，die Zeitung。用于验证多语言数据模型。",
-    sentence: "Ich lese die Zeitung.",
-    sentence_translation: "我读报纸。",
-    tags: ["noun", "reading"]
-  }
-];
-
 let state = loadState();
 let cloud = {
   client: null,
@@ -131,14 +84,6 @@ function createInitialState() {
   const items = {};
   const cards = {};
   const settings = defaultSettings();
-  demoItems.forEach((seed, index) => {
-    const item = createItem(seed, "demo");
-    items[item.id] = item;
-    const card = createCard(item, index < 2 ? "standard" : "latest");
-    card.due_at = addDays(new Date(), index - 1).toISOString();
-    card.interval_days = Math.max(0, index);
-    cards[card.id] = card;
-  });
 
   const initial = {
     activeView: "dashboard",
@@ -308,6 +253,7 @@ function normalizeLearningState(target) {
   target.study.history = Array.isArray(target.study.history) ? target.study.history : [];
   target.review = { currentCardId: null, showAnswer: false, history: [], ...(target.review || {}) };
   target.review.history = Array.isArray(target.review.history) ? target.review.history : [];
+  removeDemoItems(target);
   target.wordbooks = canonicalWordbooks(target.items || {}, target.wordbooks || {});
   Object.values(target.items || {}).forEach((item) => {
     repairSverigeItemMeaning(item);
@@ -317,6 +263,31 @@ function normalizeLearningState(target) {
     book.item_ids = [...new Set((book.item_ids || []).filter((id) => target.items[id]))];
     book.updated_at = book.updated_at || new Date().toISOString();
   });
+}
+
+function removeDemoItems(target) {
+  const demoIds = Object.values(target.items || {})
+    .filter((item) => item.source === "demo")
+    .map((item) => item.id);
+  if (!demoIds.length) return;
+  const demoIdSet = new Set(demoIds);
+  const demoCardIds = new Set();
+  demoIds.forEach((id) => delete target.items[id]);
+  Object.entries(target.cards || {}).forEach(([cardId, card]) => {
+    if (!demoIdSet.has(card.item_id)) return;
+    demoCardIds.add(cardId);
+    delete target.cards[cardId];
+  });
+  Object.values(target.wordbooks || {}).forEach((book) => {
+    book.item_ids = (book.item_ids || []).filter((id) => !demoIdSet.has(id));
+  });
+  target.modifiedStack = (target.modifiedStack || []).filter((id) => !demoIdSet.has(id));
+  target.syncLog = (target.syncLog || []).filter((entry) => !demoIdSet.has(entry.item_id));
+  target.reviewLogs = (target.reviewLogs || []).filter((entry) => !demoIdSet.has(entry.item_id));
+  if (demoCardIds.has(target.review?.currentCardId)) target.review.currentCardId = null;
+  target.review.history = (target.review.history || []).filter((snapshot) => !demoIdSet.has(snapshot?.itemId));
+  if (demoIdSet.has(target.study?.currentItemId)) target.study.currentItemId = null;
+  target.study.history = (target.study.history || []).filter((snapshot) => !demoIdSet.has(snapshot?.itemId));
 }
 
 function canonicalWordbooks(items, existing = {}) {
@@ -1254,13 +1225,19 @@ function renderStudyBookOption(book, stats) {
         <p>${languageLabel(book.language)} · ${wordbookTypeLabel(book.type)}</p>
       </div>
       <div class="wordbook-counts">
-        <span>已学 <strong>${stats.learned}</strong></span>
-        <span>跳过 <strong>${stats.skipped}</strong></span>
-        <span>共计 <strong>${stats.total}</strong></span>
+        ${renderWordbookCount("已学", stats.learned)}
+        ${renderWordbookCount("跳过", stats.skipped)}
+        ${renderWordbookCount("共计", stats.total, "is-total")}
       </div>
       <button class="primary-button" type="button" data-study-book="${book.id}">开始学习</button>
     </section>
   `;
+}
+
+function renderWordbookCount(label, value, extraClass = "") {
+  const text = String(value ?? 0);
+  const sizeClass = text.length >= 5 ? "count-size-xs" : text.length >= 4 ? "count-size-sm" : "";
+  return `<span class="${extraClass}">${escapeHtml(label)} <strong class="${sizeClass}">${escapeHtml(text)}</strong></span>`;
 }
 
 function renderStudyFilters() {
@@ -1386,9 +1363,9 @@ function renderWordbookCard(book) {
         </div>
       </div>
       <div class="wordbook-counts">
-        <span>已学 <strong>${stats.learned}</strong></span>
-        <span>跳过 <strong>${stats.skipped}</strong></span>
-        <span>共计 <strong>${stats.total}</strong></span>
+        ${renderWordbookCount("已学", stats.learned)}
+        ${renderWordbookCount("跳过", stats.skipped)}
+        ${renderWordbookCount("共计", stats.total, "is-total")}
       </div>
       <div class="table-actions">
         <button class="chip-button" type="button" data-open-wordbook-details="${book.id}">View Details</button>
@@ -1807,7 +1784,6 @@ function renderLibrary() {
           <option value="rivstart_a1a2_anki">Sverige A1/A2</option>
           <option value="rivstart_b1b2_anki">Sverige B1/B2</option>
           <option value="rivstart_b2c1_anki">Sverige B2/C1</option>
-          <option value="demo">演示</option>
         </select>
       </div>
       <div class="vocab-grid">
